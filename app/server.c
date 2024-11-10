@@ -52,7 +52,7 @@ int main() {
 	accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
 	printf("Client connected\n");
 
-	/* write(server_fd, "HTTP/1.1 200 OK\r\n\r\n", 20); */
+	write(server_fd, "HTTP/1.1 200 OK\r\n\r\n", 20);
 
 	close(server_fd);
 
