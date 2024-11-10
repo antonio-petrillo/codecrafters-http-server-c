@@ -48,12 +48,13 @@ int main() {
 
 	printf("Waiting for a client to connect...\n");
 	client_addr_len = sizeof(client_addr);
-
-	accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
-	printf("Client connected\n");
-
-	write(server_fd, "HTTP/1.1 200 OK\r\n\r\n", 20);
-
+	char* ok = "HTTP/1.1 200 OK\r\n\r\n";
+	while(1) {
+		int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
+		printf("Client connected\n");
+		write(client_fd, ok, strlen(ok));
+		close(client_fd);
+	}
 	close(server_fd);
 
 	return 0;
