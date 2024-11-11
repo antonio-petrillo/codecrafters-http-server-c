@@ -6,6 +6,8 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include "constants.h"
+#include "http.h"
 
 int main() {
 	// Disable output buffering
@@ -48,11 +50,31 @@ int main() {
 
 	printf("Waiting for a client to connect...\n");
 	client_addr_len = sizeof(client_addr);
-	char* ok = "HTTP/1.1 200 OK\r\n\r\n";
 	while(1) {
 		int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
 		printf("Client connected\n");
-		write(client_fd, ok, strlen(ok));
+
+		char buffer[BUFF_SIZE];
+		size_t bytes_read = read(client_fd, buffer, BUFF_SIZE - 1);
+		if (bytes_read < BUFF_SIZE - 1) {
+			buffer[bytes_read] = '\0';
+		}
+		request_t* req = NULL;
+		if (bytes_read > 0) {
+			 req = parse_request(buffer, bytes_read);
+		}
+
+		if (req) {
+			if (req->url[0] == '/' && req->url[1] == '\0') {
+				write(client_fd, OK, strlen(OK));
+			} else {
+				write(client_fd, NOT_OK, strlen(NOT_OK));
+			}
+			free_request(req);
+		} else {
+			write(client_fd, SERVER_ERR, strlen(SERVER_ERR));
+		}
+
 		close(client_fd);
 	}
 	close(server_fd);
