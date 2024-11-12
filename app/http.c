@@ -89,7 +89,7 @@ static void parse_headers(char* raw, size_t* index, size_t len, request_t* req) 
         }
         if(!strncmp(CRLF, raw+start, 2) && *index - start == 1) {
             // end headers
-            *index = *index + 2;
+            *index = *index + 1;
             return;
         }
 
