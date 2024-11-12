@@ -6,8 +6,21 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+/* #include <bits/pthreadtypes.h> */
+#include <pthread.h>
+
 #include "constants.h"
 #include "http.h"
+
+// TODO: build a thread safe pool and a thread-pool to improve performances
+
+// a little hack to avoid malloc a int just to pass a file descriptor
+typedef union {
+	int* ptr;
+	int value;
+} http_arg;
+
+void* serve_http(void* arg);
 
 int main() {
 	// Disable output buffering
@@ -50,46 +63,61 @@ int main() {
 
 	printf("Waiting for a client to connect...\n");
 	client_addr_len = sizeof(client_addr);
+
+	// create threads detached so I don't need to pthread_wait them
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 	while(1) {
-		int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
+		http_arg client_fd;
+		client_fd.value = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
 		printf("Client connected\n");
 
-		char buffer[BUFF_SIZE];
-		size_t bytes_read = read(client_fd, buffer, BUFF_SIZE - 1);
-		if (bytes_read < BUFF_SIZE - 1) {
-			buffer[bytes_read] = '\0';
-		}
-		request_t* req = NULL;
-		if (bytes_read > 0) {
-			 req = parse_request(buffer, bytes_read);
-			 debub_request(req);
-		}
-
-		if (req) {
-			if (req->url[0] == '/' && req->url[1] == '\0') {
-				write(client_fd, OK, strlen(OK));
-			} else if (!strncmp(req->url, "/echo/", 6)) {
-				write(client_fd, OK_HEADER, strlen(OK_HEADER));
-				write(client_fd, CONTENT_TEXT, strlen(CONTENT_TEXT));
-
-				char* echo = req->url + 6; // skip 6 character
-				write_body(client_fd, echo, strlen(echo));
-			} else if (!strncmp(req->url, "/user-agent", 11)) {
-				write(client_fd, OK_HEADER, strlen(OK_HEADER));
-				write(client_fd, CONTENT_TEXT, strlen(CONTENT_TEXT));
-				header_t* user_agent = get_header(req, USER_AGENT);
-				write_body(client_fd, user_agent->value, user_agent->value_len);
-			} else {
-				write(client_fd, NOT_OK, strlen(NOT_OK));
-			}
-			free_request(req);
-		} else {
-			write(client_fd, SERVER_ERR, strlen(SERVER_ERR));
-		}
-
-		close(client_fd);
+		pthread_t new_thread;
+		pthread_create(&new_thread, &attr, serve_http, (void *)client_fd.ptr);
 	}
 	close(server_fd);
 
 	return 0;
+}
+
+void* serve_http(void* arg) {
+	http_arg arg_ptr;
+	arg_ptr.ptr = (int*) arg;
+	int client_fd = arg_ptr.value;
+	char buffer[BUFF_SIZE];
+	size_t bytes_read = read(client_fd, buffer, BUFF_SIZE - 1);
+	if (bytes_read < BUFF_SIZE - 1) {
+		buffer[bytes_read] = '\0';
+	}
+	request_t* req = NULL;
+	if (bytes_read > 0) {
+		req = parse_request(buffer, bytes_read);
+		debub_request(req);
+	}
+
+	if (req) {
+		if (req->url[0] == '/' && req->url[1] == '\0') {
+			write(client_fd, OK, strlen(OK));
+		} else if (!strncmp(req->url, "/echo/", 6)) {
+			write(client_fd, OK_HEADER, strlen(OK_HEADER));
+			write(client_fd, CONTENT_TEXT, strlen(CONTENT_TEXT));
+
+			char* echo = req->url + 6; // skip 6 character
+			write_body(client_fd, echo, strlen(echo));
+		} else if (!strncmp(req->url, "/user-agent", 11)) {
+			write(client_fd, OK_HEADER, strlen(OK_HEADER));
+			write(client_fd, CONTENT_TEXT, strlen(CONTENT_TEXT));
+			header_t* user_agent = get_header(req, USER_AGENT);
+			write_body(client_fd, user_agent->value, user_agent->value_len);
+		} else {
+			write(client_fd, NOT_OK, strlen(NOT_OK));
+		}
+		free_request(req);
+	} else {
+		write(client_fd, SERVER_ERR, strlen(SERVER_ERR));
+	}
+
+	close(client_fd);
+	return NULL;
 }

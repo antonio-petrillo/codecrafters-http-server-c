@@ -205,6 +205,7 @@ void write_body(int fd, char* body, size_t size) {
     dprintf(fd, "%.*s", (int)size, body);
 }
 
+// TODO: maybe transfrom headers into an hashmap
 header_t* get_header(request_t* request, char* key) {
     for (size_t i = 0; i < request->headers.count; i++) {
         if (!strncmp(key, request->headers.elements[i].key, request->headers.elements[i].key_len)) {
