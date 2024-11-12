@@ -14,8 +14,10 @@ static method_t parse_method(char* raw, size_t* index, size_t len) {
     method_t method = INVALID;
     size_t start = *index;
     while(*index < len && raw[*index] != '\0' && !is_whitespace(raw[*index])) {
-       *index = *index + 1;
+        printf("%c", raw[*index]);
+        *index = *index + 1;
     }
+    printf("\n");
     char* verify = NULL;
     size_t verify_len = 0;
     switch(raw[start]) {
@@ -87,7 +89,7 @@ static void parse_headers(char* raw, size_t* index, size_t len, request_t* req) 
         }
         if(!strncmp(CRLF, raw+start, 2) && *index - start == 1) {
             // end headers
-            *index = *index + 1;
+            *index = *index + 2;
             return;
         }
 
@@ -121,6 +123,19 @@ static void parse_headers(char* raw, size_t* index, size_t len, request_t* req) 
     }
 }
 
+static void parse_body(char* raw, size_t* index, size_t len, request_t* req) {
+    header_t* content_length = get_header(req, "Content-Length");
+    req->body = &raw[*index];
+    req->body_len = 0;
+    if (content_length) {
+        for (size_t i = 0; i < content_length->value_len; i++) {
+            req->body_len *= 10;
+            req->body_len += content_length->value[i] - '0';
+        }
+    }
+    req->body[req->body_len] = '\0';
+}
+
 // assume raw is in scope for the whole request (it will be stack allocated)
 request_t* parse_request(char* raw, size_t len) {
     size_t index = 0;
@@ -146,6 +161,7 @@ request_t* parse_request(char* raw, size_t len) {
     }
     index += 10;
     parse_headers(raw, &index, len, req);
+    parse_body(raw, &index, len, req);
     return req;
 }
 
@@ -161,10 +177,6 @@ void free_request(request_t* request) {
         free(request->headers.elements);
         request->headers.count = 0;
         request->headers.capacity = 0;
-    }
-
-    if (request->body_len > 0) {
-        free(request->body);
     }
 
     free(request);
@@ -186,7 +198,7 @@ static char* method_t_to_str(method_t m) {
     return "INVALID";
 }
 
-void debub_request(request_t* request) {
+void debug_request(request_t* request) {
     printf("METHOD: %s\n", method_t_to_str(request->method));
     printf("URL: %s\n", request->url);
     printf("HEADERS: {\n");
@@ -196,7 +208,9 @@ void debub_request(request_t* request) {
             printf("\t%.*s: %.*s\n", h->key_len, h->key, h->value_len, h->value);
         }
     }
-    printf("}\n\n");
+    printf("}\n");
+    printf("BODY: {\n%.*s", (int) request->body_len, request->body);
+    printf("}\n");
 }
 
 void write_body(int fd, char* body, size_t size) {

@@ -34,7 +34,7 @@ typedef struct {
 
 request_t* parse_request(char* raw, size_t len);
 void free_request(request_t* request);
-void debub_request(request_t* request);
+void debug_request(request_t* request);
 
 void write_body(int fd, char* body, size_t size);
 header_t* get_header(request_t* request, char* key);
