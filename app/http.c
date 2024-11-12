@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
+#include <unistd.h>
 
 static int is_whitespace(char c) { // don't skip \r\n
     return c == ' ' || c == '\t';
@@ -57,9 +59,6 @@ static void skip_whitespace(char* raw, size_t* index, size_t len) {
 
 static char* parse_url(char* raw, size_t* index, size_t len) {
     size_t start = *index;
-    /* do { */
-    /*     *index = *index + 1; */
-    /* } while(*index < len && (!is_whitespace(raw[*index]) || raw[*index] == '\0' || raw[*index] != '\n'|| raw[*index] != '\r')); */
     while (!is_whitespace(raw[*index])) {
         *index = *index + 1;
     }
@@ -97,7 +96,6 @@ request_t* parse_request(char* raw, size_t len) {
     }
     skip_whitespace(raw, &index, len);
     if(strncmp("HTTP/1.1\r\n", &raw[index], 10)) {
-        printf("\n%s", &raw[index]);
         free(req);
         return NULL;
     }
@@ -121,4 +119,31 @@ void free_request(request_t* request) {
     }
 
     free(request);
+}
+
+static char* method_t_to_str(method_t m) {
+    switch (m) {
+        case GET:
+            return "GET";
+        case POST:
+            return "POST";
+        case PUT:
+            return "PUT";
+        case DELETE:
+            return "DELETE";
+        default:
+            break;
+    }
+    return "INVALID";
+}
+
+void debub_request(request_t* request) {
+    printf("METHOD := %s\n", method_t_to_str(request->method));
+    printf("URL := %s\n", request->url);
+}
+
+void write_body(int fd, char* body, size_t size) {
+    write(fd, CONTENT_LEN, strlen(CONTENT_LEN));
+    dprintf(fd, "%lu\r\n\r\n", size);
+    dprintf(fd, "%.*s", (int)size, body);
 }

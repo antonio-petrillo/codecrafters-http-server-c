@@ -32,5 +32,8 @@ typedef struct {
 
 request_t* parse_request(char* raw, size_t len);
 void free_request(request_t* request);
+void debub_request(request_t* request);
+
+void write_body(int fd, char* body, size_t size);
 
 #endif // HTTP_H_

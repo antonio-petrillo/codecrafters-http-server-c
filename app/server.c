@@ -62,11 +62,18 @@ int main() {
 		request_t* req = NULL;
 		if (bytes_read > 0) {
 			 req = parse_request(buffer, bytes_read);
+			 debub_request(req);
 		}
 
 		if (req) {
 			if (req->url[0] == '/' && req->url[1] == '\0') {
 				write(client_fd, OK, strlen(OK));
+			} else if (!strncmp(req->url, "/echo/", 6)) {
+				write(client_fd, OK_HEADER, strlen(OK_HEADER));
+				write(client_fd, CONTENT_TEXT, strlen(CONTENT_TEXT));
+
+				char* echo = req->url + 6; // skip 6 character
+				write_body(client_fd, echo, strlen(echo));
 			} else {
 				write(client_fd, NOT_OK, strlen(NOT_OK));
 			}

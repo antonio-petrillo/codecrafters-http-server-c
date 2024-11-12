@@ -11,4 +11,8 @@
 #define NOT_OK "HTTP/1.1 404 Not Found\r\n\r\n"
 #define SERVER_ERR "HTTP/1.1 500 Internal Server Error\r\n\r\n"
 
+#define OK_HEADER "HTTP/1.1 200 OK\r\n"
+#define CONTENT_TEXT "Content-Type: text/plain\r\n"
+#define CONTENT_LEN "Content-Length: "
+
 #endif // CONSTANTS_H_
