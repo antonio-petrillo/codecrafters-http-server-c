@@ -68,12 +68,57 @@ static char* parse_url(char* raw, size_t* index, size_t len) {
     }
     size_t alloc_size = *index - start + 1;
     char* url = calloc(alloc_size, sizeof(char*));
-    if (!url) {
-        return NULL;
-    }
     strncpy(url, &raw[start], alloc_size - 1);
     url[alloc_size - 1] = '\0';
     return url;
+}
+
+static void parse_headers(char* raw, size_t* index, size_t len, request_t* req) {
+    char prev = '\0';
+    while(1){
+        size_t start = *index;
+        // parse one header
+        while(*index < len) {
+            prev = raw[*index];
+            *index = *index + 1;
+            if (prev == '\r' && raw[*index] == '\n') {
+                break;
+            }
+        }
+        if(!strncmp(CRLF, raw+start, 2) && *index - start == 1) {
+            // end headers
+            *index = *index + 1;
+            return;
+        }
+
+        if (!req->headers.elements) {
+            req->headers.elements = (header_t*) calloc(ARR_DEFAULT_SIZE, sizeof(header_t));
+            req->headers.capacity = ARR_DEFAULT_SIZE;
+        }
+
+        if (req->headers.count == req->headers.capacity) {
+            req->headers.elements = realloc(req->headers.elements, req->headers.capacity << 1 * sizeof(header_t));
+            req->headers.capacity <<= 1;
+        }
+
+        // whole header is inside [start, *index]
+        // 1. split at ':' -> key
+        // 2. drop whiltespaces, remove CRLF -> value
+        header_t* header = &req->headers.elements[req->headers.count++];
+        size_t split_index = start;
+        while(raw[split_index] != ':') {
+            split_index++;
+        }
+        header->key = &raw[start];
+        header->key_len = split_index - start;
+        split_index++;
+        skip_whitespace(raw, &split_index, len);
+        header->value = &raw[split_index];
+        header->value_len = *index - split_index - 1;
+
+        // start on next line
+        *index = *index + 1;
+    }
 }
 
 // assume raw is in scope for the whole request (it will be stack allocated)
@@ -84,9 +129,9 @@ request_t* parse_request(char* raw, size_t len) {
         return NULL;
     }
     request_t* req = (request_t*) malloc(sizeof(request_t));
-    if (!req) {
-        return NULL;
-    }
+    req->headers.elements = NULL;
+    req->headers.count = 0;
+    req->headers.capacity = 0;
     req->method = method;
     skip_whitespace(raw, &index, len);
     req->url = parse_url(raw, &index, len);
@@ -99,6 +144,8 @@ request_t* parse_request(char* raw, size_t len) {
         free(req);
         return NULL;
     }
+    index += 10;
+    parse_headers(raw, &index, len, req);
     return req;
 }
 
@@ -110,8 +157,10 @@ void free_request(request_t* request) {
 
     free(request->url);
 
-    if (request->headers.count > 0) {
+    if (request->headers.elements) {
         free(request->headers.elements);
+        request->headers.count = 0;
+        request->headers.capacity = 0;
     }
 
     if (request->body_len > 0) {
@@ -138,12 +187,29 @@ static char* method_t_to_str(method_t m) {
 }
 
 void debub_request(request_t* request) {
-    printf("METHOD := %s\n", method_t_to_str(request->method));
-    printf("URL := %s\n", request->url);
+    printf("METHOD: %s\n", method_t_to_str(request->method));
+    printf("URL: %s\n", request->url);
+    printf("HEADERS: {\n");
+    if (request->headers.elements) {
+        for(size_t i = 0; i < request->headers.count; i++) {
+            header_t* h = &request->headers.elements[i];
+            printf("\t%.*s: %.*s\n", h->key_len, h->key, h->value_len, h->value);
+        }
+    }
+    printf("}\n\n");
 }
 
 void write_body(int fd, char* body, size_t size) {
     write(fd, CONTENT_LEN, strlen(CONTENT_LEN));
     dprintf(fd, "%lu\r\n\r\n", size);
     dprintf(fd, "%.*s", (int)size, body);
+}
+
+header_t* get_header(request_t* request, char* key) {
+    for (size_t i = 0; i < request->headers.count; i++) {
+        if (!strncmp(key, request->headers.elements[i].key, request->headers.elements[i].key_len)) {
+           return &request->headers.elements[i];
+        }
+    }
+    return NULL;
 }

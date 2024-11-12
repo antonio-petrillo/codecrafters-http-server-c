@@ -74,6 +74,11 @@ int main() {
 
 				char* echo = req->url + 6; // skip 6 character
 				write_body(client_fd, echo, strlen(echo));
+			} else if (!strncmp(req->url, "/user-agent", 11)) {
+				write(client_fd, OK_HEADER, strlen(OK_HEADER));
+				write(client_fd, CONTENT_TEXT, strlen(CONTENT_TEXT));
+				header_t* user_agent = get_header(req, USER_AGENT);
+				write_body(client_fd, user_agent->value, user_agent->value_len);
 			} else {
 				write(client_fd, NOT_OK, strlen(NOT_OK));
 			}

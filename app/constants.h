@@ -15,4 +15,8 @@
 #define CONTENT_TEXT "Content-Type: text/plain\r\n"
 #define CONTENT_LEN "Content-Length: "
 
+#define ARR_DEFAULT_SIZE 4
+
+#define USER_AGENT "User-Agent"
+
 #endif // CONSTANTS_H_
