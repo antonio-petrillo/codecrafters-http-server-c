@@ -1,10 +1,13 @@
 #include "http.h"
 #include "constants.h"
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
 #include <unistd.h>
+#include <zconf.h>
+#include <zlib.h>
 
 static int is_whitespace(char c) { // don't skip \r\n
     return c == ' ' || c == '\t';
@@ -213,16 +216,56 @@ void debug_request(request_t* request) {
     printf("}\n");
 }
 
-void write_body(int fd, char* body, size_t size) {
-    write(fd, CONTENT_LEN, strlen(CONTENT_LEN));
-    dprintf(fd, "%lu\r\n\r\n", size);
-    dprintf(fd, "%.*s", (int)size, body);
+static int write_encoding_header(int client_fd, header_t* header) {
+	if (!header) {
+		return 0;
+	}
+	char* enc = header->value;
+	for(size_t i = 0; i <= header->value_len - 4; i++) {
+		if (enc[i] == 'g' && enc[i + 1] == 'z' && enc[i + 2] == 'i' && enc[i + 3] == 'p') {
+			write(client_fd, ENCODING_GZIP, strlen(ENCODING_GZIP));
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void write_body(int fd, char* body, size_t size, request_t* req) {
+    header_t* header = get_header(req, "Accept-Encoding");
+    int encode = write_encoding_header(fd, header);
+
+    if (!encode) {
+        write(fd, CONTENT_LEN, strlen(CONTENT_LEN));
+        dprintf(fd, "%lu\r\n\r\n", size);
+        dprintf(fd, "%.*s", (int)size, body);
+    } else {
+        char buffer[BUFF_SIZE];
+        memset(buffer, 0, BUFF_SIZE);
+
+        z_stream stream;
+        stream.zalloc = Z_NULL;
+        stream.zfree = Z_NULL;
+        stream.opaque = Z_NULL;
+
+        stream.avail_in = (uInt) size;
+        stream.next_in = (Bytef *) body;
+        stream.avail_out = (uInt) BUFF_SIZE;
+        stream.next_out = (Bytef *) buffer;
+        deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY);
+        deflate(&stream, Z_FINISH);
+        deflateEnd(&stream);
+
+        write(fd, CONTENT_LEN, strlen(CONTENT_LEN));
+        dprintf(fd, "%lu\r\n\r\n", stream.total_out);
+        write(fd, buffer, stream.total_out);
+    }
 }
 
 // TODO: maybe transfrom headers into an hashmap
 header_t* get_header(request_t* request, char* key) {
     for (size_t i = 0; i < request->headers.count; i++) {
-        if (!strncmp(key, request->headers.elements[i].key, request->headers.elements[i].key_len)) {
+        size_t len = strlen(key);
+        if (len == request->headers.elements[i].key_len && !strncmp(key, request->headers.elements[i].key, len)) {
            return &request->headers.elements[i];
         }
     }

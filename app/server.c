@@ -10,6 +10,7 @@
 /* #include <bits/pthreadtypes.h> */
 #include <pthread.h>
 #include <fcntl.h>
+#include <zlib.h>
 
 #include "constants.h"
 #include "http.h"
@@ -80,6 +81,38 @@ int main(int argc, char *argv[]) {
 	close(server_fd);
 
 	return 0;
+
+}
+
+static void write_file(int client_fd, char* path, request_t* req) {
+	int file_fd = open(path, O_WRONLY | O_CREAT);
+	if (file_fd == -1) {
+		write(client_fd, SERVER_ERR, strlen(SERVER_ERR));
+	} else {
+		int written = write(file_fd, req->body, req->body_len);
+		if (written == -1) {
+			write(client_fd, SERVER_ERR, strlen(SERVER_ERR));
+		} else {
+			write(client_fd, CREATED, strlen(CREATED));
+		}
+	}
+
+}
+
+static void read_file(int client_fd, char* path, request_t* req) {
+	int file_fd = open(path, O_RDONLY);
+	if (file_fd == -1) {
+		write(client_fd, NOT_FOUND, strlen(NOT_FOUND));
+	} else {
+		write(client_fd, OK_HEADER, strlen(OK_HEADER));
+		char file_buff[BUFF_SIZE];
+		size_t file_size = read(file_fd, file_buff, BUFF_SIZE - 1);
+		file_buff[file_size] = '\0';
+
+		write(client_fd, CONTENT_OCTET, strlen(CONTENT_OCTET));
+		write_body(client_fd, file_buff, file_size, req);
+		close(file_fd);
+	}
 }
 
 void* serve_http(void* arg) {
@@ -105,12 +138,12 @@ void* serve_http(void* arg) {
 			write(client_fd, CONTENT_TEXT, strlen(CONTENT_TEXT));
 
 			char* echo = req->url + 6; // skip 6 character
-			write_body(client_fd, echo, strlen(echo));
+			write_body(client_fd, echo, strlen(echo), req);
 		} else if (!strncmp(req->url, "/user-agent", 11)) {
 			write(client_fd, OK_HEADER, strlen(OK_HEADER));
 			write(client_fd, CONTENT_TEXT, strlen(CONTENT_TEXT));
 			header_t* user_agent = get_header(req, USER_AGENT);
-			write_body(client_fd, user_agent->value, user_agent->value_len);
+			write_body(client_fd, user_agent->value, user_agent->value_len, req);
 		} else if (!strncmp(req->url, "/files/", 7)) {
 			char* filename = req->url + 7;
 			char path[PATH_MAX_LEN];
@@ -125,31 +158,9 @@ void* serve_http(void* arg) {
 
 			// TODO: add mode_t to complete open params
 			if (req->method == GET) {
-				int file_fd = open(path, O_RDONLY);
-				if (file_fd == -1) {
-					write(client_fd, NOT_FOUND, strlen(NOT_FOUND));
-				} else {
-					write(client_fd, OK_HEADER, strlen(OK_HEADER));
-					write(client_fd, CONTENT_OCTET, strlen(CONTENT_OCTET));
-
-					char file_buff[BUFF_SIZE];
-					size_t file_size = read(file_fd, file_buff, BUFF_SIZE - 1);
-					file_buff[file_size] = '\0';
-					write_body(client_fd, file_buff, file_size);
-					close(file_fd);
-				}
+				read_file(client_fd, path, req);
 			} else if (req->method == POST) {
-				int file_fd = open(path, O_WRONLY | O_CREAT);
-				if (file_fd == -1) {
-					write(client_fd, SERVER_ERR, strlen(SERVER_ERR));
-				} else {
-					int written = write(file_fd, req->body, req->body_len);
-					if (written == -1) {
-						write(client_fd, SERVER_ERR, strlen(SERVER_ERR));
-					} else {
-						write(client_fd, CREATED, strlen(CREATED));
-					}
-				}
+				write_file(client_fd, path, req);
 			} else {
 				write(client_fd, METHOD_NOT_ALLOWED, strlen(METHOD_NOT_ALLOWED));
 			}
@@ -162,6 +173,7 @@ void* serve_http(void* arg) {
 	}
 
 	close(client_fd);
+	pthread_exit(NULL);
 	return NULL;
 }
 

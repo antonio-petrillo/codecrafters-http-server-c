@@ -36,7 +36,7 @@ request_t* parse_request(char* raw, size_t len);
 void free_request(request_t* request);
 void debug_request(request_t* request);
 
-void write_body(int fd, char* body, size_t size);
+void write_body(int fd, char* body, size_t size, request_t* req);
 header_t* get_header(request_t* request, char* key);
 
 #endif // HTTP_H_

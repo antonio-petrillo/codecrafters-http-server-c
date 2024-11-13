@@ -16,6 +16,7 @@
 #define CREATED "HTTP/1.1 201 Created\r\n\r\n"
 #define CONTENT_TEXT "Content-Type: text/plain\r\n"
 #define CONTENT_OCTET "Content-Type: application/octet-stream\r\n"
+#define ENCODING_GZIP "Content-Encoding: gzip\r\n"
 #define CONTENT_LEN "Content-Length: "
 
 #define ARR_DEFAULT_SIZE 4
