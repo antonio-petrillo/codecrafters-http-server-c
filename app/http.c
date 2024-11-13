@@ -239,6 +239,7 @@ void write_body(int fd, char* body, size_t size, request_t* req) {
         dprintf(fd, "%lu\r\n\r\n", size);
         dprintf(fd, "%.*s", (int)size, body);
     } else {
+        // the only one time that chat-gpt proved useful to me
         char buffer[BUFF_SIZE];
         memset(buffer, 0, BUFF_SIZE);
 
